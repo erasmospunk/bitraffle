@@ -79,9 +79,10 @@
 
 
     var getOutputs = function(page, outputs) {
+      var requestUrl = txApiQueryUrl + "&page="+page;
       var request = new XMLHttpRequest();
 
-      request.open('GET', txApiQueryUrl + "&page="+page, true);
+      request.open('GET', requestUrl, true);
 
       request.onload = function() {
         if (request.status >= 200 && request.status < 400){
@@ -108,12 +109,12 @@
             setTimeout(function () { getOutputs(apiResult.data.pagination.next_page, outputs); }, 250);
           }
         } else {
-          error(request.statusText);
+          error(request.statusText === "" ? "Could not get "+ requestUrl : request.statusText);
         }
       };
 
       request.onerror = function() {
-        error(request.statusText);
+        error(request.statusText === "" ? "Could not get "+ requestUrl : request.statusText);
       };
 
       request.send();
@@ -156,15 +157,15 @@
       setTimeout(function () { callback(message); }, 0);
     };
 
-    var blockApiQueryUrl = "https://api.biteasy.com/blockchain/v1/blocks?per_page=1";
+    var requestUrl = "https://api.biteasy.com/blockchain/v1/blocks?per_page=1";
 
     if (height >= 0) {
-      blockApiQueryUrl += "&height=" + height;
+      requestUrl += "&height=" + height;
     }
 
     var request = new XMLHttpRequest();
 
-    request.open('GET', blockApiQueryUrl, true);
+    request.open('GET', requestUrl, true);
 
     request.onload = function() {
       if (request.status >= 200 && request.status < 400){
@@ -181,12 +182,12 @@
 
         setTimeout(function () { callback(undefined, apiResult.data.blocks[0]); }, 0);
       } else {
-        error(request.statusText);
+        error(request.statusText === "" ? "Could not get "+ requestUrl : request.statusText);
       }
     };
 
     request.onerror = function() {
-      error(request.statusText);
+      error(request.statusText === "" ? "Could not get "+ requestUrl : request.statusText);
     };
 
     request.send();

@@ -1,11 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>BitRaffle</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Organize raffle/lottery games based on the Bitcoin blockchain.">
+  <link rel="canonical" href="http://bitraffle.info/">
+
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
+  <meta property="og:image" content="/bitraffle.png" />
+  <meta property="og:title" content="BitRaffle" />
+  <meta property="og:description" content="BitRaffle is a free service that lets you organize raffle/lottery games, the ticket drawing is based on the Bitcoin blockchain and anybody can verify the result." />
 
   <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
   <link rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css">
+
+  <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+  <!--[if lt IE 9]>
+  <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+  <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+  <![endif]-->
+
 
   <style type="text/css">
     html {
@@ -28,7 +47,7 @@
     #raffle .header {
       padding-bottom: 1em;
     }
-    .spinner {
+    #spinner {
       padding: 20px 0;
     }
     #buy-ticket {
@@ -91,6 +110,8 @@
           address !== undefined && address !== "" &&
           ticketBtc !== undefined && !isNaN(ticketBtc) && ticketBtc > 0) {
 
+        params = {block: block, address: address, ticket: ticketBtc};
+
         $("#raffle .title").text(title);
         $("#raffle").removeClass("hidden");
         $(".target-block").text(block);
@@ -108,7 +129,7 @@
 
 
     function showPayment(address, ticketBtc, title) {
-      $(".spinner").addClass("hidden");
+      $("#spinner").addClass("hidden");
       $("#buy-ticket").removeClass("hidden");
       $("#payment-link p").text(address);
       $("#ticket-price").text(ticketBtc);
@@ -117,6 +138,14 @@
       $("#tickets").change(updatePayment);
       updatePayment();
     }
+
+    function showError(message) {
+      $("#spinner").addClass("hidden");
+      $("#winner").addClass("hidden");
+      $("#error-box").removeClass("hidden");
+      $("#error-box p").text(message);
+    }
+
 
     function getUpdatePayment(address, ticketBtc, title) {
       return function() {
@@ -146,18 +175,24 @@
     function runRaffle(block, address, ticketBtc, title) {
       bitraffle.run(block, address, 1e8 * ticketBtc, function(err, result) {
         if (err) {
-          console.error(err);
+          showError(err);
+//          console.error(err);
+          return;
+        }
+        else if (err === "") {
+          showError("An unknown error occurred");
+//          console.error("An unknown error occurred");
           return;
         }
 
-        if (result.winner) {
-          showWinner(result.tx.hash, result.winner);
-          console.log("Winner transaction is: " + result.tx.hash + " with ticket " + result.winner);
-        }
-        else {
-          console.log("Not a winner yet");
-        }
 
+        if (result !== undefined && result.winner) {
+          showWinner(result.tx.hash, result.winner);
+//          console.log("Winner transaction is: " + result.tx.hash + " with ticket " + result.winner);
+        }
+//        else {
+//          console.log("Not a winner yet");
+//        }
       }, function(latestBlock) {
 //        console.log(latestBlock);
         if (latestBlock.height < block) {
@@ -166,9 +201,9 @@
           showPayment(address, ticketBtc, title);
         }
         else {
+          $("#spinner").addClass("hidden");
+          $("#winner").removeClass("hidden");
           $(".blocks-left").text(0);
-          $(".winner").removeClass("hidden");
-          $(".spinner").addClass("hidden");
         }
 
       }, function(newTxs) {
@@ -247,11 +282,16 @@
       </p>
     </div>
 
-    <div class="spinner text-center">
+    <div id="spinner" class="text-center">
       <h1><i class="fa fa-spinner fa-spin"></i></h1>
     </div>
 
-    <div class="winner alert alert-success hidden">
+    <div id="error-box" class="alert alert-danger hidden">
+      <h5>Error</h5>
+      <p></p>
+    </div>
+
+    <div id="winner" class="alert alert-success hidden">
       <p class="calculating-winner">Calculating winner... <i class="fa fa-spinner fa-spin"></i></p>
       <div class="winner-found hidden">
         <h5>Winning transaction is <span class="winning-tx"></span>!</h5>
@@ -377,6 +417,17 @@
       Uses APIs from <a href="https://www.biteasy.com/" target="_blank">biteasy</a></p>
   </div>
 </div>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-52005992-1', 'bitraffle.info');
+  ga('send', 'pageview');
+
+</script>
 
 </body>
 </html>
