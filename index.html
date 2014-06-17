@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BitRaffle</title>
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+  <link rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css">
+
+  <style type="text/css">
+    html {
+      position: relative;
+      min-height: 100%;
+    }
+    body {
+      /* Margin bottom by footer height */
+      margin-bottom: 60px;
+    }
+    a, a:active, a:hover {
+      color: #5cb85c;
+    }
+    .logo {
+      color: #5cb85c;
+    }
+    #raffle {
+      margin: 80px 0;
+    }
+    #raffle .header {
+      padding-bottom: 1em;
+    }
+    .spinner {
+      padding: 20px 0;
+    }
+    #buy-ticket {
+      margin-bottom: 50px;
+    }
+    #qrcode {
+      margin-bottom: 20px;
+    }
+    #qrcode canvas {
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #how-it-works {
+      margin: 60px 0;
+    }
+    .btn-create {
+      color: #fff;
+      background-color: #5cb85c;
+      border-color: #4cae4c;
+    }
+    #footer {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      /* Set the fixed height of the footer here */
+      height: 60px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      width: auto;
+      max-width: 960px;
+      padding: 0 15px;
+    }
+    .container .text-muted {
+      margin: 20px 0;
+    }
+  </style>
+
+  <!-- jQuery -->
+  <script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+
+  <script src="jquery.qrcode.min.js"></script>
+
+  <script src="sjcl.js"></script>
+
+  <script src="bitraffle.js"></script>
+
+  <script>
+    $(document).ready(function(){
+//      console.log(getUrlParams());
+
+      var title = getUrlParams().title;
+      var block = Number(getUrlParams().block);
+      var address = getUrlParams().address;
+      var ticketBtc = Number(getUrlParams().ticket);
+
+      if (title !== undefined && title !== "" &&
+          block !== undefined && !isNaN(block) && block >= 0 &&
+          address !== undefined && address !== "" &&
+          ticketBtc !== undefined && !isNaN(ticketBtc) && ticketBtc > 0) {
+
+        $("#raffle .title").text(title);
+        $("#raffle").removeClass("hidden");
+        $(".target-block").text(block);
+
+        runRaffle(block, address, ticketBtc, title);
+      }
+    });
+
+    function showWinner(txHash, ticketHash) {
+      $(".winner-found").removeClass("hidden");
+      $(".calculating-winner").addClass("hidden");
+      $(".winning-tx").text(txHash);
+      $(".winning-ticket").text(ticketHash);
+    }
+
+
+    function showPayment(address, ticketBtc, title) {
+      $(".spinner").addClass("hidden");
+      $("#buy-ticket").removeClass("hidden");
+      $("#payment-link p").text(address);
+      $("#ticket-price").text(ticketBtc);
+
+      var updatePayment = getUpdatePayment(address, ticketBtc, title);
+      $("#tickets").change(updatePayment);
+      updatePayment();
+    }
+
+    function getUpdatePayment(address, ticketBtc, title) {
+      return function() {
+        var numOfTickets = Number($("#tickets").val());
+        if (numOfTickets < 1) {
+          numOfTickets = 1;
+        }
+        var message = numOfTickets === 1 ? "1 ticket" : numOfTickets + " tickets";
+        var totalAmount = ticketBtc * numOfTickets;
+        totalAmount = Math.round(totalAmount * 1e8) / 1e8; // avoids strange float point arithmetic errors
+        var paymentLink = "bitcoin:"+address+
+            "?amount="+totalAmount+
+            "&label="+encodeURIComponent(title)+
+            "&message="+encodeURIComponent(message);
+        $("#payment-link").attr("href", paymentLink);
+        $("#total-amount").text(totalAmount);
+        $('#qrcode').empty();
+        $('#qrcode').qrcode({
+          width: 196,
+          height: 196,
+          background      : "#ffffff",
+          foreground      : "#333333",
+          text: paymentLink});
+      };
+    }
+
+    function runRaffle(block, address, ticketBtc, title) {
+      bitraffle.run(block, address, 1e8 * ticketBtc, function(err, result) {
+        if (err) {
+          console.error(err);
+          return;
+        }
+
+        if (result.winner) {
+          showWinner(result.tx.hash, result.winner);
+          console.log("Winner transaction is: " + result.tx.hash + " with ticket " + result.winner);
+        }
+        else {
+          console.log("Not a winner yet");
+        }
+
+      }, function(latestBlock) {
+//        console.log(latestBlock);
+        if (latestBlock.height < block) {
+          var blocksLeft = block - latestBlock.height;
+          $(".blocks-left").text(blocksLeft);
+          showPayment(address, ticketBtc, title);
+        }
+        else {
+          $(".blocks-left").text(0);
+          $(".winner").removeClass("hidden");
+          $(".spinner").addClass("hidden");
+        }
+
+      }, function(newTxs) {
+        var tableRows = [];
+        var totalAmount = Number($(".amount-in-raffle").text());
+        if (isNaN(totalAmount)) { totalAmount = 0; }
+        totalAmount = Math.round(totalAmount * 1e8);
+        for (var i = 0; i < newTxs.length; i++) {
+          var row = "<tr><td>"+newTxs[i].hash+"</td><td><i class='fa fa-btc'></i> "+newTxs[i].value/1e8+
+                    "</td><td>"+newTxs[i].tickets.length+"</td></tr>";
+          tableRows.push(row);
+          totalAmount += newTxs[i].value;
+        }
+        $(".amount-in-raffle").text(totalAmount / 1e8);
+        $("#tickets-bought").removeClass("hidden");
+        $("#result-table > tbody:last").append(tableRows.join(""));
+      });
+    }
+
+
+    function getUrlParams() {
+      "use strict";
+      var match,
+          pl     = /\+/g,  // Regex for replacing addition symbol with a space
+          search = /([^&=]+)=?([^&]*)/g,
+          decode = function (s) { return decodeURIComponent(s.replace(pl, " ")); },
+          query  = window.location.search.substring(1);
+
+      var urlParams = {};
+      match = search.exec(query);
+      while (match) {
+        var name = decode(match[1]), value = decode(match[2]);
+
+        if (urlParams[name] === undefined) {
+          urlParams[name] = value;
+        }
+        else {
+          if (!$.isArray(urlParams[name])) {
+            urlParams[name] = [urlParams[name]];
+          }
+          urlParams[name].push(value);
+        }
+        match = search.exec(query);
+      }
+      return urlParams;
+    }
+
+
+
+
+  </script>
+
+</head>
+<body>
+<div class="container">
+
+  <div class="page-header">
+    <h1><i class="fa fa-ticket logo"></i> BitRaffle</h1>
+  </div>
+
+  <p class="lead">Organize raffle/lottery games based on the Bitcoin blockchain.</p>
+
+
+  <div id="raffle" class="hidden">
+    <div class="header">
+
+      <h3>
+        <span class="title"></span>
+        <small>Ticket will drawn at block <span class="target-block"></span>
+          (<span class="blocks-left"><i class="fa fa-spinner fa-spin"></i></span> left)</small>
+      </h3>
+
+      <p>The total amount gathered is
+        <i class="fa fa-btc"></i>
+        <span class="amount-in-raffle"><i class="fa fa-spinner fa-spin"></i></span>
+      </p>
+    </div>
+
+    <div class="spinner text-center">
+      <h1><i class="fa fa-spinner fa-spin"></i></h1>
+    </div>
+
+    <div class="winner alert alert-success hidden">
+      <p class="calculating-winner">Calculating winner... <i class="fa fa-spinner fa-spin"></i></p>
+      <div class="winner-found hidden">
+        <h5>Winning transaction is <span class="winning-tx"></span>!</h5>
+        <p>With ticket <span class="winning-ticket"></span></p>
+      </div>
+    </div>
+
+    <div id="buy-ticket" class="row hidden">
+      <div class="col-md-8">
+        <div class="row">
+          <form class="form-horizontal" role="form">
+            <div class="form-group">
+              <label for="tickets" class="col-sm-offset-1 col-sm-3 control-label">Buy tickets</label>
+              <div class="col-sm-4">
+                <input type="number" class="form-control" id="tickets" value="1" min="1">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-sm-offset-1 col-sm-3 control-label">Price per ticket</label>
+              <div class="col-sm-4">
+                <p class="form-control-static"><i class="fa fa-btc"></i> <span id="ticket-price"></span></p>
+              </div>
+            </div>
+            <hr>
+            <div class="form-group">
+              <label class="col-sm-offset-1 col-sm-3 control-label">Total</label>
+              <div class="col-sm-4">
+                <p class="form-control-static"><i class="fa fa-btc"></i> <span id="total-amount"></span></p>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <a id="payment-link" href="">
+          <div id="qrcode" ></div>
+          <p></p>
+        </a>
+      </div>
+    </div>
+
+    <div id="tickets-bought" class="hidden">
+      <h4>Tickets bought</h4>
+      <div class="table-responsive">
+        <table id="result-table" class="table table-striped">
+
+          <thead>
+          <tr>
+            <th>Transaction ID</th>
+            <th>Paid</th>
+            <th>n. of tickets</th>
+          </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+
+  <div id="how-it-works" class="row">
+    <div class="col-md-6">
+      <h4>How it works?</h4>
+      <p>The organizer specifies their Bitcoin address, the ticket price and the block height that the ticket draw to happens.</p>
+      <p>Each participant sends founds to the provided address and their ticket(s) hash is calculated based on the amount they sent, the address,
+        the transaction id and the target block hashes. The person with the smallest ticket hash wins.
+      </p>
+      <p>A Bitcoin block is very difficult to generate and the resulting hash is unpredictable we can safely
+      assume that it is impossible to cheat. Yet because the results are derived from a public ledger, they can be
+      verified independently.</p>
+      <p>The software runs in the browser and it is completely open source.</p>
+    </div>
+    <div class="col-md-6">
+      <form id="params" class="form-horizontal" role="form">
+        <div class="col-sm-offset-3 col-sm-9">
+          <h4>Create your own...</h4>
+        </div>
+        <div class="form-group">
+          <label for="title" class="col-sm-3 control-label">Title</label>
+          <div class="col-sm-9">
+            <input type="text" class="form-control" id="title" name="title" placeholder="My lottery">
+            <span class="help-block">The title of the game</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="block" class="col-sm-3 control-label">Target block</label>
+          <div class="col-sm-9">
+            <input type="number" class="form-control" id="block" name="block" placeholder="300000">
+            <span class="help-block">The block height the ticket draw happens</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="address" class="col-sm-3 control-label">Address</label>
+          <div class="col-sm-9">
+            <input type="text" class="form-control" id="address" name="address" placeholder="1yourSuperCoolVanityAddress1111111">
+            <span class="help-block">The organizer's Bitcoin address</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="ticket" class="col-sm-3 control-label">Ticket price</label>
+          <div class="col-sm-9">
+            <input type="number" class="form-control" id="ticket" name="ticket" placeholder="0.01">
+            <span class="help-block">the ticket price in <i class="fa fa-btc"></i></span>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="col-sm-offset-3 col-sm-9">
+            <button type="submit" class="btn btn-create">Create</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<div id="footer">
+  <div class="container">
+    <p class="text-muted">Build with <i class="fa fa-heart"></i> by <a href="https://github.com/erasmospunk">Giannis Dzegoutanis</a>.
+      Uses APIs from <a href="https://www.biteasy.com/" target="_blank">biteasy</a></p>
+  </div>
+</div>
+
+</body>
+</html>
