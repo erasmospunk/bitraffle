@@ -34,8 +34,17 @@
     body {
       /* Margin bottom by footer height */
       margin-bottom: 60px;
+      color: #3E4B52;
     }
-    a, a:active, a:hover {
+    .page-header a,
+    .page-header a:link,
+    .page-header a:visited,
+    .page-header a:active,
+    .page-header a:hover {
+      color: #3E4B52;
+      text-decoration: none;
+    }
+    a, a:link, a:visited, a:active, a:hover {
       color: #5cb85c;
     }
     .logo {
@@ -98,12 +107,26 @@
 
   <script>
     $(document).ready(function(){
+      // When form submitted, encode data and redirect
+      $("#create-raffle").submit(function( event ) {
+        event.preventDefault();
+
+        var data = encodeData($("#block").val(), $("#address").val(), $("#ticket").val());
+
+        window.location.href = "?" + $.param({title: $("#title").val()}) + "&data=" + data;
+      });
 //      console.log(getUrlParams());
 
-      var title = getUrlParams().title;
-      var block = Number(getUrlParams().block);
-      var address = getUrlParams().address;
-      var ticketBtc = Number(getUrlParams().ticket);
+      var urlParams = getUrlParams();
+
+      var title = urlParams.title;
+
+      var data = decodeData(urlParams);
+
+      var block = Number(data.block);
+      var address = data.address;
+      var ticketBtc = Number(data.ticket);
+
 
       if (title !== undefined && title !== "" &&
           block !== undefined && !isNaN(block) && block >= 0 &&
@@ -120,6 +143,25 @@
       }
     });
 
+    function decodeData(urlParams) {
+      var utf8String = sjcl.codec.utf8String;
+      var base64 = sjcl.codec.base64;
+
+      try{
+        return JSON.parse(utf8String.fromBits(base64.toBits(urlParams.data)))
+      }catch(e){
+        // Don't care for error
+        return urlParams;
+      }
+    }
+
+    function encodeData(block, address, ticket) {
+      var utf8String = sjcl.codec.utf8String;
+      var base64 = sjcl.codec.base64;
+
+      return base64.fromBits(utf8String.toBits(JSON.stringify({block:block, address:address, ticket:ticket})));
+    }
+
     function showWinner(txHash, ticketHash) {
       $(".winner-found").removeClass("hidden");
       $(".calculating-winner").addClass("hidden");
@@ -131,7 +173,7 @@
     function showPayment(address, ticketBtc, title) {
       $("#spinner").addClass("hidden");
       $("#buy-ticket").removeClass("hidden");
-      $("#payment-link p").text(address);
+      $(".payment-address").text(address);
       $("#ticket-price").text(ticketBtc);
 
       var updatePayment = getUpdatePayment(address, ticketBtc, title);
@@ -167,7 +209,7 @@
           width: 196,
           height: 196,
           background      : "#ffffff",
-          foreground      : "#333333",
+          foreground      : "#3E4B52",
           text: paymentLink});
       };
     }
@@ -261,7 +303,9 @@
 <div class="container">
 
   <div class="page-header">
-    <h1><i class="fa fa-ticket logo"></i> BitRaffle</h1>
+    <a href="/">
+      <h1><i class="fa fa-ticket logo"></i> BitRaffle</h1>
+    </a>
   </div>
 
   <p class="lead">Organize raffle/lottery games based on the Bitcoin blockchain.</p>
@@ -301,35 +345,33 @@
 
     <div id="buy-ticket" class="row hidden">
       <div class="col-md-8">
-        <div class="row">
-          <form class="form-horizontal" role="form">
-            <div class="form-group">
-              <label for="tickets" class="col-sm-offset-1 col-sm-3 control-label">Buy tickets</label>
-              <div class="col-sm-4">
-                <input type="number" class="form-control" id="tickets" value="1" min="1">
-              </div>
+        <form class="form-horizontal" role="form">
+          <div class="form-group">
+            <label for="tickets" class="col-sm-offset-1 col-sm-3 control-label">Buy tickets</label>
+            <div class="col-sm-4">
+              <input type="number" class="form-control" id="tickets" value="1" min="1">
             </div>
-            <div class="form-group">
-              <label class="col-sm-offset-1 col-sm-3 control-label">Price per ticket</label>
-              <div class="col-sm-4">
-                <p class="form-control-static"><i class="fa fa-btc"></i> <span id="ticket-price"></span></p>
-              </div>
+          </div>
+          <div class="form-group">
+            <label class="col-sm-offset-1 col-sm-3 control-label">Price per ticket</label>
+            <div class="col-sm-4">
+              <p class="form-control-static"><i class="fa fa-btc"></i> <span id="ticket-price"></span></p>
             </div>
-            <hr>
-            <div class="form-group">
-              <label class="col-sm-offset-1 col-sm-3 control-label">Total</label>
-              <div class="col-sm-4">
-                <p class="form-control-static"><i class="fa fa-btc"></i> <span id="total-amount"></span></p>
-              </div>
+          </div>
+          <hr>
+          <div class="form-group">
+            <label class="col-sm-offset-1 col-sm-3 control-label">Total</label>
+            <div class="col-sm-4">
+              <p class="form-control-static"><i class="fa fa-btc"></i> <span id="total-amount"></span></p>
             </div>
-          </form>
-        </div>
+          </div>
+        </form>
       </div>
 
       <div class="col-md-4">
         <a id="payment-link" href="">
           <div id="qrcode" ></div>
-          <p></p>
+          <p class="text-center"><span class="payment-address"></span></p>
         </a>
       </div>
     </div>
@@ -368,35 +410,35 @@
       <p>The software runs in the browser and it is completely open source.</p>
     </div>
     <div class="col-md-6">
-      <form id="params" class="form-horizontal" role="form">
+      <form id="create-raffle" class="form-horizontal" role="form">
         <div class="col-sm-offset-3 col-sm-9">
           <h4>Create your own...</h4>
         </div>
         <div class="form-group">
           <label for="title" class="col-sm-3 control-label">Title</label>
           <div class="col-sm-9">
-            <input type="text" class="form-control" id="title" name="title" placeholder="My lottery">
+            <input required="required" type="text" class="form-control" id="title" name="title" placeholder="My lottery">
             <span class="help-block">The title of the game</span>
           </div>
         </div>
         <div class="form-group">
           <label for="block" class="col-sm-3 control-label">Target block</label>
           <div class="col-sm-9">
-            <input type="number" class="form-control" id="block" name="block" placeholder="300000">
+            <input required="required" type="number" min="0" class="form-control" id="block" name="block" placeholder="300000">
             <span class="help-block">The block height the ticket draw happens</span>
           </div>
         </div>
         <div class="form-group">
           <label for="address" class="col-sm-3 control-label">Address</label>
           <div class="col-sm-9">
-            <input type="text" class="form-control" id="address" name="address" placeholder="1yourSuperCoolVanityAddress1111111">
+            <input required="required" type="text" class="form-control" id="address" name="address" placeholder="1yourSuperCoolVanityAddress1111111">
             <span class="help-block">The organizer's Bitcoin address</span>
           </div>
         </div>
         <div class="form-group">
           <label for="ticket" class="col-sm-3 control-label">Ticket price</label>
           <div class="col-sm-9">
-            <input type="number" class="form-control" id="ticket" name="ticket" placeholder="0.01" step="0.01">
+            <input required="required" type="number" min="0.001" class="form-control" id="ticket" name="ticket" placeholder="0.01" step="0.001">
             <span class="help-block">the ticket price in <i class="fa fa-btc"></i></span>
           </div>
         </div>
