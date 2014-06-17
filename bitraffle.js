@@ -22,9 +22,8 @@
       setTimeout(function () { callback(message); }, 0);
     };
 
+    var TX_PROCESS_BATCH = 20;
     var unspentOutputs = [];
-    var txApiQueryUrl = "https://api.biteasy.com/blockchain/v1/addresses/"+address+"/unspent-outputs?per_page=40";
-
     var ticketsList = [];
     var ticketsIndex = {};
     var targetBlock;
@@ -43,8 +42,10 @@
 
     var outputProcessor = function(outputs) {
       var processedTx = [];
-      for (var i=0; i<outputs.length; i++) {
-        var tx = {hash: outputs[i].transaction_hash, value: outputs[i].value, tickets: []};
+      // Process at max TX_PROCESS_BATCH outputs
+      var txToProcess = outputs.length > TX_PROCESS_BATCH ? TX_PROCESS_BATCH : outputs.length;
+      for (var i = 0; i < txToProcess; i++) {
+        var tx = {hash: outputs[i].tx, value: Math.round(outputs[i].amount * 1e8), tickets: []};
         processedTx.push(tx);
 
 //        console.log(output)
@@ -59,7 +60,7 @@
           var ticketHash;
           if (targetBlock) {
             // Different ticket hash for the same transaction based on j nonce
-            var hashBin = sjcl.hash.sha256.hash(address + tx.hash + targetBlock.hash + targetBlock.previous_block + j);
+            var hashBin = sjcl.hash.sha256.hash(address + tx.hash + targetBlock.hash + targetBlock.prev_block_hash + j);
             ticketHash = sjcl.codec.hex.fromBits(hashBin);
           }
           else {
@@ -75,119 +76,121 @@
       if (updateTxs !== undefined) {
         setTimeout(function () { updateTxs(processedTx); }, 0);
       }
+
+      // Next outputs block to process
+      outputs = outputs.slice(txToProcess);
+
+      if (outputs.length > 0) {
+        setTimeout(function () { outputProcessor(outputs); }, 0);
+      }
+      else {
+        finish();
+      }
     };
 
 
-    var getOutputs = function(page, outputs) {
-      var requestUrl = txApiQueryUrl + "&page="+page;
-      var request = new XMLHttpRequest();
+    var getOutputs = function() {
 
-      request.open('GET', requestUrl, true);
-
-      request.onload = function() {
-        if (request.status >= 200 && request.status < 400){
-          var apiResult = JSON.parse(request.responseText);
-//          console.log(apiResult);
-          if (apiResult.data === undefined || apiResult.data.outputs === undefined) {
-            error("Server returned incorrect data");
-            return;
-          }
-          else if (apiResult.data.outputs.length === 0 && outputs.length === 0) {
-            error("Address " + address + " has not received any founds yet. Try again later.");
-            return;
-          }
-
-          outputs = outputs.concat(apiResult.data.outputs);
-
-          setTimeout(function () { outputProcessor(apiResult.data.outputs); }, 0);
-
-          if (apiResult.data.pagination.next_page === false) {
-            setTimeout(function () { finish(); }, 0);
-          }
-          else {
-            // process next page, maximum query 4 times per second
-            setTimeout(function () { getOutputs(apiResult.data.pagination.next_page, outputs); }, 250);
-          }
-        } else {
-          error(request.statusText === "" ? "Could not get "+ requestUrl : request.statusText);
+      get("http://btc.blockr.io/api/v1/address/unspent/" + address, function(err, response) {
+        if (err) {
+          error(err);
+          return;
         }
-      };
 
-      request.onerror = function() {
-        error(request.statusText === "" ? "Could not get "+ requestUrl : request.statusText);
-      };
+        var apiResult = JSON.parse(response);
+//          console.log(apiResult);
+        if (apiResult.data === undefined || apiResult.data.unspent === undefined) {
+          error("Server returned incorrect data");
+          return;
+        }
+        else if (apiResult.data.unspent.length === 0) {
+          error("Address " + address + " has not received any founds yet. Try again later.");
+          return;
+        }
 
-      request.send();
+        unspentOutputs = apiResult.data.unspent;
+
+        setTimeout(function () { outputProcessor(unspentOutputs); }, 0);
+      });
     };
 
 
     // Get latest block,
-    global.bitraffle.getBlock(-1, function(err, latestBlock){
+    getBlocks("last,"+targetBlockHeight, function(err, blocks){
       if (err) {
         error(err);
         return;
       }
 
-      setTimeout(function () { updateBlock(latestBlock); }, 0);
+      setTimeout(function () { updateBlock({height: blocks[0].nb}); }, 0);
 
-      // if target block is in the future
-      if (latestBlock.height < targetBlockHeight) {
-        setTimeout(function () { getOutputs(1, unspentOutputs); }, 250); // 4 queries/s
+      // if only latest block found and target block is in the future
+      if (blocks.length === 1) {
+        setTimeout(function () { getOutputs(); }, 0);
       }
       else {
-        global.bitraffle.getBlock(targetBlockHeight, function(err, block){
-          if (err) {
-            error(err);
-            return;
-          }
-
-          targetBlock = block;
-          // start querying
-          setTimeout(function () { getOutputs(1, unspentOutputs); }, 250); // 4 queries/s
-        });
+        targetBlock = blocks[1];
+        setTimeout(function () { getOutputs(); }, 0);
       }
     });
-
-
-
   };
 
-  global.bitraffle.getBlock = function(height, callback) {
+  function getBlocks(heightQuery, callback) {
     var error = function(message) {
       setTimeout(function () { callback(message); }, 0);
     };
 
-    var requestUrl = "https://api.biteasy.com/blockchain/v1/blocks?per_page=1";
+    var requestUrl = "http://btc.blockr.io/api/v1/block/info/" + heightQuery;
 
-    if (height >= 0) {
-      requestUrl += "&height=" + height;
-    }
+    get(requestUrl, function(err, response) {
+      if (err) {
+        error(err);
+        return;
+      }
+
+      var apiResult = JSON.parse(response);
+//          console.log(apiResult);
+      if (apiResult.data === undefined) {
+        error("Server returned incorrect data");
+        return;
+      }
+      else if (apiResult.data.length === 0) {
+        error("Block " + height + " was not not found.");
+        return;
+      }
+
+      var blocks;
+      if (apiResult.data instanceof Array) {
+        blocks = apiResult.data;
+      } else {
+        blocks = [apiResult.data]
+      }
+
+      setTimeout(function () { callback(undefined, blocks); }, 0);
+
+    });
+  }
+
+
+  function get(url, callback) {
+    var error = function(message) {
+      setTimeout(function () { callback(message); }, 0);
+    };
 
     var request = new XMLHttpRequest();
 
-    request.open('GET', requestUrl, true);
+    request.open('GET', url, true);
 
     request.onload = function() {
       if (request.status >= 200 && request.status < 400){
-        var apiResult = JSON.parse(request.responseText);
-//          console.log(apiResult);
-        if (apiResult.data === undefined || apiResult.data.blocks === undefined) {
-          error("Server returned incorrect data");
-          return;
-        }
-        else if (apiResult.data.blocks.length === 0) {
-          error("Block " + height + " was not not found.");
-          return;
-        }
-
-        setTimeout(function () { callback(undefined, apiResult.data.blocks[0]); }, 0);
+        setTimeout(function () { callback(undefined, request.responseText); }, 0);
       } else {
-        error(request.statusText === "" ? "Could not get "+ requestUrl : request.statusText);
+        error(request.statusText === "" ? "Could not get "+ url : request.statusText);
       }
     };
 
     request.onerror = function() {
-      error(request.statusText === "" ? "Could not get "+ requestUrl : request.statusText);
+      error(request.statusText === "" ? "Could not get "+ url : request.statusText);
     };
 
     request.send();
