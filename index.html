@@ -232,9 +232,10 @@
           showWinner(result.tx.hash, result.winner);
 //          console.log("Winner transaction is: " + result.tx.hash + " with ticket " + result.winner);
         }
-//        else {
+        else {
 //          console.log("Not a winner yet");
-//        }
+          showWinner("none", "none");
+        }
       }, function(latestBlock) {
 //        console.log(latestBlock);
         if (latestBlock.height < block) {
