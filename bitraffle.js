@@ -77,7 +77,7 @@
             var ticketHash;
 
             // Different ticket hash for the same transaction based on j nonce
-            var hashBin = sjcl.hash.sha256.hash(address + tx.hash + targetBlock.hash + targetBlock.prev_block_hash + j);
+            var hashBin = sjcl.hash.sha256.hash(tx.hash + targetBlock.hash + j);
             ticketHash = sjcl.codec.hex.fromBits(hashBin);
 
             tx.tickets.push(ticketHash);

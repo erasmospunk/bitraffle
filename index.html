@@ -19,13 +19,6 @@
   <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
   <link rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css">
 
-  <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
-  <!--[if lt IE 9]>
-  <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
-  <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
-  <![endif]-->
-
-
   <style type="text/css">
     html {
       position: relative;
@@ -96,10 +89,19 @@
     }
   </style>
 
+
+  <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+  <!--[if lt IE 9]>
+  <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+  <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+  <![endif]-->
+
   <!-- jQuery -->
   <script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
 
   <script src="jquery.qrcode.min.js"></script>
+
+  <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
 
   <script src="sjcl.js"></script>
 
@@ -454,14 +456,20 @@
   <div id="how-it-works" class="row">
     <div class="col-md-6">
       <h4>How it works?</h4>
+
       <p>The organizer specifies their Bitcoin address, the ticket price and the block height that the ticket draw to happens.</p>
-      <p>Each participant sends founds to the provided address and their ticket(s) hash is calculated based on the amount they sent, the address,
-        the transaction id and the target block hashes. The person with the smallest ticket hash wins.
-      </p>
+
+      <p>Each participant sends founds to the provided address and their ticket(s) hash is calculated with the following formula:</p>
+
+      <pre>sha256(transactionHash + targetBlockHash + nonce)</pre>
+
+      <p>Where <code>nonce</code> is increased for the amount of tickets bought. The person with the smallest hash wins.</p>
+
       <p>A Bitcoin block is very difficult to generate and the resulting hash is unpredictable we can safely
       assume that it is impossible to cheat. Yet because the results are derived from a public ledger, they can be
       verified independently.</p>
-      <p>The software runs in the browser and it is completely <a href="https://github.com/erasmospunk/bitraffle">open source</a>!</p>
+
+      <p>The software runs in the browser and it is <a href="https://github.com/erasmospunk/bitraffle">open source</a>.</p>
     </div>
     <div class="col-md-6">
       <form id="create-raffle" class="form-horizontal" role="form">
@@ -515,9 +523,52 @@
 </div>
 
 <div id="footer">
+
+  <div class="modal fade" id="license" tabindex="-1" role="dialog" aria-labelledby="licenseLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+          <h4 class="modal-title" id="myModalLabel">The MIT License (MIT)</h4>
+        </div>
+        <div class="modal-body">
+          <p>Copyright (c) 2014 Giannis Dzegoutanis</p>
+
+          <p>
+            Permission is hereby granted, free of charge, to any person obtaining a copy
+            of this software and associated documentation files (the "Software"), to deal
+            in the Software without restriction, including without limitation the rights
+            to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+            copies of the Software, and to permit persons to whom the Software is
+            furnished to do so, subject to the following conditions:
+          </p>
+
+          <p>
+            The above copyright notice and this permission notice shall be included in all
+            copies or substantial portions of the Software.
+          </p>
+
+          <p>
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+            IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+            FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+            AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+            LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+            OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+            SOFTWARE.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <div class="container">
-    <p class="text-muted">Build with <i class="fa fa-heart"></i> by <a href="https://github.com/erasmospunk">Giannis Dzegoutanis</a>.
-      Uses APIs from <a href="http://blockr.io/" target="_blank">blockr.io</a></p>
+    <p class="text-muted">
+      &copy; 2014 <a href="https://github.com/erasmospunk">Giannis Dzegoutanis</a>.
+      Uses APIs from <a href="http://blockr.io/" target="_blank">blockr.io</a>.
+      Read the terms of use <a href="" data-toggle="modal" data-target="#license">here</a>.
+    </p>
   </div>
 </div>
 
