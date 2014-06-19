@@ -1,3 +1,4 @@
+
 /**
  * BitRaffle a Bitcoin based Raffle or Lottery. Works currently in browser only.
  *
@@ -14,6 +15,9 @@
  */
 
 (function (global) {
+  "use strict";
+  var sjcl = global.sjcl;
+
   global.bitraffle = {};
 
   global.bitraffle.run = function(targetBlockHeight, address, ticketPrice, callback, updateBlock, updateTxs) {
@@ -23,7 +27,6 @@
     };
 
     var TX_PROCESS_BATCH = 20;
-    var unspentOutputs = [];
     var ticketsList = [];
     var ticketsIndex = {};
     var targetBlock;
@@ -40,36 +43,42 @@
       }
     };
 
-    var outputProcessor = function(outputs) {
+    var outputProcessor = function(outputs, isFinalBlock) {
       var processedTx = [];
+
       // Process at max TX_PROCESS_BATCH outputs
       var txToProcess = outputs.length > TX_PROCESS_BATCH ? TX_PROCESS_BATCH : outputs.length;
-      for (var i = 0; i < txToProcess; i++) {
-        var tx = {hash: outputs[i].tx, value: Math.round(outputs[i].amount * 1e8), tickets: []};
-        processedTx.push(tx);
+//      var txToProcess = outputs.length;
 
+      for (var i = 0; i < txToProcess; i++) {
+        var output = outputs[i];
 //        console.log(output)
-        var tickets = Math.floor(tx.value / ticketPrice);
-        if (tickets === 0) {
-//            console.debug(tx.hash + " transaction too small to buy a ticket: " + tx.value);
+
+        // Ignore sent outputs with negative amount
+        if (output.amount < 0) {
           continue;
         }
 
-        // Create ticket hashes
-        for (var j=0; j < tickets; j++) {
-          var ticketHash;
-          if (targetBlock) {
+
+        var tx = {hash: output.tx, value: Math.round(output.amount * 1e8), totalTickets: 0, tickets: []};
+        processedTx.push(tx);
+
+        var totalTickets = Math.floor(tx.value / ticketPrice);
+        tx.totalTickets = totalTickets;
+
+        if (totalTickets > 0 && targetBlock) {
+          // Create ticket hashes
+          for (var j=0; j < totalTickets; j++) {
+            var ticketHash;
+
             // Different ticket hash for the same transaction based on j nonce
             var hashBin = sjcl.hash.sha256.hash(address + tx.hash + targetBlock.hash + targetBlock.prev_block_hash + j);
             ticketHash = sjcl.codec.hex.fromBits(hashBin);
+
+            tx.tickets.push(ticketHash);
+            ticketsIndex[ticketHash] = tx;
+            ticketsList.push(ticketHash);
           }
-          else {
-            // target block is not know yet
-            ticketHash = "";
-          }
-          tx.tickets.push(ticketHash);
-          ticketsIndex[ticketHash] = tx;
-          ticketsList.push(ticketHash);
         }
       }
 
@@ -78,39 +87,48 @@
       }
 
       // Next outputs block to process
-      outputs = outputs.slice(txToProcess);
+      var outputsLeft = outputs.slice(txToProcess);
 
-      if (outputs.length > 0) {
-        setTimeout(function () { outputProcessor(outputs); }, 0);
+      if (outputsLeft.length > 0) {
+        setTimeout(function () { outputProcessor(outputsLeft, isFinalBlock); }, 0);
       }
-      else {
+      else if (isFinalBlock) {
         finish();
       }
     };
 
 
-    var getOutputs = function() {
+    var getOutputs = function(fromTx) {
+      var apiUrl = "http://btc.blockr.io/api/v1/address/txs/" + address;
 
-      get("http://btc.blockr.io/api/v1/address/unspent/" + address, function(err, response) {
+      if (fromTx) {
+        apiUrl += "?from_tx=" + fromTx;
+      }
+
+      get(apiUrl, function(err, response) {
         if (err) {
           error(err);
           return;
         }
 
         var apiResult = JSON.parse(response);
-//          console.log(apiResult);
-        if (apiResult.data === undefined || apiResult.data.unspent === undefined) {
-          error("Server returned incorrect data");
-          return;
-        }
-        else if (apiResult.data.unspent.length === 0) {
-          error("Address " + address + " has not received any founds yet. Try again later.");
+        if (apiResult.data === undefined || apiResult.data.txs === undefined) {
+          error("Server returned incorrect data. Request URL: " + apiUrl);
           return;
         }
 
-        unspentOutputs = apiResult.data.unspent;
+        var txs = apiResult.data.txs;
+        var data = apiResult.data;
+        var isFinalPage = true;
 
-        setTimeout(function () { outputProcessor(unspentOutputs); }, 0);
+        // Check if there are more transactions
+        if (data.limit_txs === data.nb_txs_displayed &&
+            data.nb_txs > data.limit_txs) {
+          isFinalPage = false;
+          var lastTxHash = txs[txs.length - 1].tx;
+          setTimeout(function () { getOutputs(lastTxHash); }, 0);
+        }
+        setTimeout(function () { outputProcessor(txs, isFinalPage); }, 0);
       });
     };
 
@@ -151,11 +169,11 @@
       var apiResult = JSON.parse(response);
 //          console.log(apiResult);
       if (apiResult.data === undefined) {
-        error("Server returned incorrect data");
+        error("Server returned incorrect data. Request URL: " + requestUrl);
         return;
       }
       else if (apiResult.data.length === 0) {
-        error("Block " + height + " was not not found.");
+        error("Block " + heightQuery + " was not not found. Request URL: " + requestUrl);
         return;
       }
 
@@ -163,7 +181,7 @@
       if (apiResult.data instanceof Array) {
         blocks = apiResult.data;
       } else {
-        blocks = [apiResult.data]
+        blocks = [apiResult.data];
       }
 
       setTimeout(function () { callback(undefined, blocks); }, 0);

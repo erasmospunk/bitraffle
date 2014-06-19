@@ -229,7 +229,7 @@
 
 
         if (result !== undefined && result.winner) {
-          showWinner(result.tx.hash, result.winner);
+          showWinner(result.tx.hash, result.winner.substr(0, 24));
 //          console.log("Winner transaction is: " + result.tx.hash + " with ticket " + result.winner);
         }
         else {
@@ -255,10 +255,26 @@
         if (isNaN(totalAmount)) { totalAmount = 0; }
         totalAmount = Math.round(totalAmount * 1e8);
         for (var i = 0; i < newTxs.length; i++) {
-          var row = "<tr><td>"+newTxs[i].hash+"</td><td><i class='fa fa-btc'></i> "+newTxs[i].value/1e8+
-                    "</td><td>"+newTxs[i].tickets.length+"</td></tr>";
+          var tx = newTxs[i];
+          var row =
+              "<tr><td>"+tx.hash+"</td>" +
+                  "<td><i class='fa fa-btc'></i> "+tx.value/1e8+"</td>" +
+                  "<td>"+tx.totalTickets+"</td></tr>";
           tableRows.push(row);
-          totalAmount += newTxs[i].value;
+          totalAmount += tx.value;
+
+          // Show tickets
+          if (tx.tickets.length > 0) {
+            var rowspan = " rowspan='" + (tx.tickets.length + 1) + "'";
+
+            tableRows.push("<tr><td"+rowspan+">Tickets</td><td"+rowspan+"></td></tr>");
+
+            for (var j = 0; j < tx.tickets.length; j++) {
+              var ticketShort = tx.tickets[j].substr(0, 24);
+              var ticketRow = "<tr><td>"+ticketShort+"</td></tr>";
+              tableRows.push(ticketRow);
+            }
+          }
         }
         $(".amount-in-raffle").text(totalAmount / 1e8);
         $("#tickets-bought").removeClass("hidden");
@@ -351,6 +367,9 @@
             <label for="tickets" class="col-sm-offset-1 col-sm-3 control-label">Buy tickets</label>
             <div class="col-sm-4">
               <input type="number" class="form-control" id="tickets" value="1" min="1">
+              <div id="free-tickets" class="hidden">
+                <span class="help-block">+1 every <i id="free-tickets-every">5</i> tickets</span>
+              </div>
             </div>
           </div>
           <div class="form-group">
@@ -380,7 +399,7 @@
     <div id="tickets-bought" class="hidden">
       <h4>Tickets bought</h4>
       <div class="table-responsive">
-        <table id="result-table" class="table table-striped">
+        <table id="result-table" class="table">
 
           <thead>
           <tr>
@@ -433,7 +452,7 @@
           <label for="address" class="col-sm-3 control-label">Address</label>
           <div class="col-sm-9">
             <input required="required" type="text" class="form-control" id="address" name="address" placeholder="1yourSuperCoolVanityAddress1111111">
-            <span class="help-block">The organizer's Bitcoin address</span>
+            <span class="help-block">The organizer's Bitcoin address. Use an empty address</span>
           </div>
         </div>
         <div class="form-group">
