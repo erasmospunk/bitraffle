@@ -20,7 +20,7 @@
 
   global.bitraffle = {};
 
-  global.bitraffle.run = function(targetBlockHeight, address, ticketPrice, callback, updateBlock, updateTxs) {
+  global.bitraffle.run = function(targetBlockHeight, address, ticketPrice, giftEvery, callback, updateBlock, updateTxs) {
 
     var error = function(message) {
       setTimeout(function () { callback(message); }, 0);
@@ -64,6 +64,11 @@
         processedTx.push(tx);
 
         var totalTickets = Math.floor(tx.value / ticketPrice);
+
+        if (giftEvery > 0) {
+          totalTickets += Math.floor(totalTickets / giftEvery);
+        }
+
         tx.totalTickets = totalTickets;
 
         if (totalTickets > 0 && targetBlock) {

@@ -111,7 +111,7 @@
       $("#create-raffle").submit(function( event ) {
         event.preventDefault();
 
-        var data = encodeData($("#block").val(), $("#address").val(), $("#ticket").val());
+        var data = encodeData($("#block").val(), $("#address").val(), $("#ticket").val(), $("#gift").val());
 
         window.location.href = "?" + $.param({title: $("#title").val()}) + "&data=" + data;
       });
@@ -126,20 +126,19 @@
       var block = Number(data.block);
       var address = data.address;
       var ticketBtc = Number(data.ticket);
-
+      var giftEvery = Number(data.gift);
+      giftEvery = isNaN(giftEvery) ? 0 : giftEvery;
 
       if (title !== undefined && title !== "" &&
           block !== undefined && !isNaN(block) && block >= 0 &&
           address !== undefined && address !== "" &&
           ticketBtc !== undefined && !isNaN(ticketBtc) && ticketBtc > 0) {
 
-        params = {block: block, address: address, ticket: ticketBtc};
-
         $("#raffle .title").text(title);
         $("#raffle").removeClass("hidden");
         $(".target-block").text(block);
 
-        runRaffle(block, address, ticketBtc, title);
+        runRaffle(block, address, ticketBtc, giftEvery, title);
       }
     });
 
@@ -155,11 +154,12 @@
       }
     }
 
-    function encodeData(block, address, ticket) {
+    function encodeData(block, address, ticket, gift) {
       var utf8String = sjcl.codec.utf8String;
       var base64 = sjcl.codec.base64;
 
-      return base64.fromBits(utf8String.toBits(JSON.stringify({block:block, address:address, ticket:ticket})));
+      var data = {block: block, address: address, ticket: ticket, gift: gift};
+      return base64.fromBits(utf8String.toBits(JSON.stringify(data)));
     }
 
     function showWinner(txHash, ticketHash) {
@@ -170,13 +170,18 @@
     }
 
 
-    function showPayment(address, ticketBtc, title) {
+    function showPayment(address, ticketBtc, giftEvery, title) {
       $("#spinner").addClass("hidden");
       $("#buy-ticket").removeClass("hidden");
       $(".payment-address").text(address);
       $("#ticket-price").text(ticketBtc);
 
-      var updatePayment = getUpdatePayment(address, ticketBtc, title);
+      if (giftEvery > 0) {
+        $("#gift-tickets").removeClass("hidden");
+        $("#gift-tickets-every").text(giftEvery);
+      }
+
+      var updatePayment = getUpdatePayment(address, ticketBtc, giftEvery, title);
       $("#tickets").change(updatePayment);
       updatePayment();
     }
@@ -189,14 +194,26 @@
     }
 
 
-    function getUpdatePayment(address, ticketBtc, title) {
+    function getUpdatePayment(address, ticketBtc, giftEvery, title) {
       return function() {
         var numOfTickets = Number($("#tickets").val());
         if (numOfTickets < 1) {
           numOfTickets = 1;
         }
-        var message = numOfTickets === 1 ? "1 ticket" : numOfTickets + " tickets";
-        var totalAmount = ticketBtc * numOfTickets;
+
+        var ticketsToPay = numOfTickets;
+        var gift = 0;
+
+        if (giftEvery > 0) {
+          gift = Math.floor(numOfTickets / giftEvery);
+        }
+
+        var message = ticketsToPay === 1 ? "1 ticket" : ticketsToPay + " tickets";
+        if (gift > 0) {
+          message += " + " + gift + " free";
+        }
+
+        var totalAmount = ticketBtc * ticketsToPay;
         totalAmount = Math.round(totalAmount * 1e8) / 1e8; // avoids strange float point arithmetic errors
         var paymentLink = "bitcoin:"+address+
             "?amount="+totalAmount+
@@ -204,6 +221,13 @@
             "&message="+encodeURIComponent(message);
         $("#payment-link").attr("href", paymentLink);
         $("#total-amount").text(totalAmount);
+
+        if (gift > 0) {
+          $("#number-of-tickets").text(ticketsToPay + " + " + gift + " free");
+        }
+        else {
+          $("#number-of-tickets").text(ticketsToPay);
+        }
         $('#qrcode').empty();
         $('#qrcode').qrcode({
           width: 196,
@@ -214,8 +238,8 @@
       };
     }
 
-    function runRaffle(block, address, ticketBtc, title) {
-      bitraffle.run(block, address, 1e8 * ticketBtc, function(err, result) {
+    function runRaffle(block, address, ticketBtc, giftEvery, title) {
+      bitraffle.run(block, address, 1e8 * ticketBtc, giftEvery, function(err, result) {
         if (err) {
           showError(err);
 //          console.error(err);
@@ -241,7 +265,7 @@
         if (latestBlock.height < block) {
           var blocksLeft = block - latestBlock.height;
           $(".blocks-left").text(blocksLeft);
-          showPayment(address, ticketBtc, title);
+          showPayment(address, ticketBtc, giftEvery, title);
         }
         else {
           $("#spinner").addClass("hidden");
@@ -254,6 +278,7 @@
         var totalAmount = Number($(".amount-in-raffle").text());
         if (isNaN(totalAmount)) { totalAmount = 0; }
         totalAmount = Math.round(totalAmount * 1e8);
+
         for (var i = 0; i < newTxs.length; i++) {
           var tx = newTxs[i];
           var row =
@@ -277,8 +302,11 @@
           }
         }
         $(".amount-in-raffle").text(totalAmount / 1e8);
-        $("#tickets-bought").removeClass("hidden");
-        $("#result-table > tbody:last").append(tableRows.join(""));
+        // Show table if there are transactions
+        if (newTxs.length > 0) {
+          $("#tickets-bought").removeClass("hidden");
+          $("#result-table > tbody:last").append(tableRows.join(""));
+        }
       });
     }
 
@@ -367,8 +395,8 @@
             <label for="tickets" class="col-sm-offset-1 col-sm-3 control-label">Buy tickets</label>
             <div class="col-sm-4">
               <input type="number" class="form-control" id="tickets" value="1" min="1">
-              <div id="free-tickets" class="hidden">
-                <span class="help-block">+1 every <i id="free-tickets-every">5</i> tickets</span>
+              <div id="gift-tickets" class="hidden">
+                <span class="help-block">one free every <i id="gift-tickets-every"></i> tickets</span>
               </div>
             </div>
           </div>
@@ -383,6 +411,12 @@
             <label class="col-sm-offset-1 col-sm-3 control-label">Total</label>
             <div class="col-sm-4">
               <p class="form-control-static"><i class="fa fa-btc"></i> <span id="total-amount"></span></p>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="col-sm-offset-1 col-sm-3 control-label">Number of tickets</label>
+            <div class="col-sm-4">
+              <p class="form-control-static"><span id="number-of-tickets">1</span></p>
             </div>
           </div>
         </form>
@@ -459,7 +493,14 @@
           <label for="ticket" class="col-sm-3 control-label">Ticket price</label>
           <div class="col-sm-9">
             <input required="required" type="number" min="0.001" class="form-control" id="ticket" name="ticket" placeholder="0.01" step="0.001">
-            <span class="help-block">the ticket price in <i class="fa fa-btc"></i></span>
+            <span class="help-block">The ticket price in <i class="fa fa-btc"></i></span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="gift" class="col-sm-3 control-label">Gift every</label>
+          <div class="col-sm-9">
+            <input required="required" type="number" min="0" class="form-control" id="gift" name="gift" placeholder="5">
+            <span class="help-block">Give a free ticket every specified amount of tickets (0 for none)</span>
           </div>
         </div>
         <div class="form-group">
