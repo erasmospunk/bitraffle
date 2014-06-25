@@ -43,6 +43,10 @@
     .logo {
       color: #5cb85c;
     }
+    .simplified {
+      display: none!important;
+      visibility: hidden!important;
+    }
     #raffle {
       margin: 80px 0;
     }
@@ -123,6 +127,10 @@
 
       var title = urlParams.title;
 
+      if (urlParams.simple) {
+        $("#tickets-bought").addClass("simplified");
+      }
+
       var data = decodeData(urlParams);
 
       var block = Number(data.block);
@@ -165,6 +173,7 @@
     }
 
     function showWinner(txHash, ticketHash) {
+      $("#tickets-bought").removeClass("simplified");
       $(".winner-found").removeClass("hidden");
       $(".calculating-winner").addClass("hidden");
       $(".winning-tx").text(txHash);
