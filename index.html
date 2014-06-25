@@ -173,11 +173,13 @@
     }
 
     function showWinner(txHash, ticketHash) {
-      $("#tickets-bought").removeClass("simplified");
       $(".winner-found").removeClass("hidden");
       $(".calculating-winner").addClass("hidden");
       $(".winning-tx").text(txHash);
       $(".winning-ticket").text(ticketHash);
+      if (txHash !== "none") {
+        $("#tickets-bought").removeClass("simplified");
+      }
     }
 
 
