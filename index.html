@@ -67,6 +67,25 @@
       margin-left: auto;
       margin-right: auto;
     }
+    .winning-ticket {
+      font-weight: 700;
+    }
+    .ticket {
+      font-family: monospace
+    }
+
+    .ticket:before {
+      display: inline-block;
+      font-family: FontAwesome;
+      font-style: normal;
+      font-weight: normal;
+      line-height: 1;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      content: "\f145";
+      padding-right: 0.2em;
+    }
+
     #how-it-works {
       margin: 60px 0;
     }
@@ -112,20 +131,21 @@
   <script src="bitraffle.js"></script>
 
   <script>
+    var TICKET_LENGTH = 16;
+    var MAX_WINNERS = 3;
     $(document).ready(function(){
       // When form submitted, encode data and redirect
       $("#create-raffle").submit(function( event ) {
         event.preventDefault();
 
-        var data = encodeData($("#block").val(), $("#address").val(), $("#ticket").val(), $("#gift").val());
+        var data = encodeData($("#title").val(), $("#block").val(), $("#address").val(), $("#ticket").val(),
+            $("#gift").val(),$("#winners").val());
 
-        window.location.href = "?" + $.param({title: $("#title").val()}) + "&data=" + data;
+        window.location.href = "?data=" + data;
       });
 //      console.log(getUrlParams());
 
       var urlParams = getUrlParams();
-
-      var title = urlParams.title;
 
       if (urlParams.simple) {
         $("#tickets-bought").addClass("simplified");
@@ -133,11 +153,14 @@
 
       var data = decodeData(urlParams);
 
+      var title = data.title;
       var block = Number(data.block);
       var address = data.address;
       var ticketBtc = Number(data.ticket);
       var giftEvery = Number(data.gift);
       giftEvery = isNaN(giftEvery) ? 0 : giftEvery;
+      var maxWinners = Number(data.winners);
+      maxWinners = isNaN(maxWinners) ? 1 : maxWinners;
 
       if (title !== undefined && title !== "" &&
           block !== undefined && !isNaN(block) && block >= 0 &&
@@ -148,7 +171,7 @@
         $("#raffle").removeClass("hidden");
         $(".target-block").text(block);
 
-        runRaffle(block, address, ticketBtc, giftEvery, title);
+        runRaffle(block, address, ticketBtc, giftEvery, maxWinners, title);
       }
     });
 
@@ -164,11 +187,11 @@
       }
     }
 
-    function encodeData(block, address, ticket, gift) {
+    function encodeData(title, block, address, ticket, gift, winners) {
       var utf8String = sjcl.codec.utf8String;
       var base64 = sjcl.codec.base64;
 
-      var data = {block: block, address: address, ticket: ticket, gift: gift};
+      var data = {title: title, block: block, address: address, ticket: ticket, gift: gift, winners: winners};
       return base64.fromBits(utf8String.toBits(JSON.stringify(data)));
     }
 
@@ -182,6 +205,23 @@
       }
     }
 
+    function showFollowups(winners) {
+      if (winners.length > 1) {
+
+        var tableRows = [];
+        // We skip the first winner
+        for (var i = 1; i < winners.length; i++) {
+          var winner = winners[i];
+          var row =
+              "<dt class='ticket'>"+winner.ticket.substr(0, TICKET_LENGTH)+"</dt>" +
+              "<dd>"+winner.tx.hash+"</dd>";
+          tableRows.push(row);
+        }
+
+        $("#followup-winners > dl:last").append(tableRows.join(""));
+        $("#followup-winners").removeClass("hidden");
+      }
+    }
 
     function showPayment(address, ticketBtc, giftEvery, title) {
       $("#spinner").addClass("hidden");
@@ -251,8 +291,8 @@
       };
     }
 
-    function runRaffle(block, address, ticketBtc, giftEvery, title) {
-      bitraffle.run(block, address, 1e8 * ticketBtc, giftEvery, function(err, result) {
+    function runRaffle(block, address, ticketBtc, giftEvery, maxWinners, title) {
+      bitraffle.run(block, address, 1e8 * ticketBtc, giftEvery, maxWinners, function(err, result) {
         if (err) {
           showError(err);
 //          console.error(err);
@@ -265,9 +305,11 @@
         }
 
 
-        if (result !== undefined && result.winner) {
-          showWinner(result.tx.hash, result.winner.substr(0, 24));
-//          console.log("Winner transaction is: " + result.tx.hash + " with ticket " + result.winner);
+        if (result !== undefined && result.winners) {
+          var winner = result.winners[0];
+          showWinner(winner.tx.hash, winner.ticket.substr(0, TICKET_LENGTH));
+//          console.log("Winner transaction is: " + winner.tx.hash + " with ticket " + winner.ticket);
+          showFollowups(result.winners);
         }
         else {
 //          console.log("Not a winner yet");
@@ -308,7 +350,7 @@
             tableRows.push("<tr><td"+rowspan+">Tickets</td><td"+rowspan+"></td></tr>");
 
             for (var j = 0; j < tx.tickets.length; j++) {
-              var ticketShort = tx.tickets[j].substr(0, 24);
+              var ticketShort = "<span class='ticket'>" + tx.tickets[j].substr(0, TICKET_LENGTH) + "</span>";
               var ticketRow = "<tr><td>"+ticketShort+"</td></tr>";
               tableRows.push(ticketRow);
             }
@@ -397,7 +439,14 @@
       <p class="calculating-winner">Calculating winner... <i class="fa fa-spinner fa-spin"></i></p>
       <div class="winner-found hidden">
         <h5>Winning transaction is <span class="winning-tx"></span>!</h5>
-        <p>With ticket <span class="winning-ticket"></span></p>
+        <p>With ticket <span class="winning-ticket ticket"></span></p>
+
+        <div id="followup-winners" class="hidden">
+          <hr/>
+          <h6>Follow up winners:</h6>
+          <dl class="dl-horizontal"></dl>
+        </div>
+
       </div>
     </div>
 
@@ -522,6 +571,13 @@
           <div class="col-sm-9">
             <input required="required" type="number" min="0" class="form-control" id="gift" name="gift" placeholder="5">
             <span class="help-block">Give a free ticket every specified amount of tickets (0 for none)</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="winners" class="col-sm-3 control-label">Max winners</label>
+          <div class="col-sm-9">
+            <input required="required" type="number" min="1" class="form-control" id="winners" name="winners" placeholder="1">
+            <span class="help-block">How many winners there will be</span>
           </div>
         </div>
         <div class="form-group">

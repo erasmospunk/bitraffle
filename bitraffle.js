@@ -17,13 +17,17 @@
 (function (global) {
   "use strict";
   var sjcl = global.sjcl;
+  var bitraffle = {};
+  global.bitraffle = bitraffle;
 
-  global.bitraffle = {};
-
-  global.bitraffle.run = function(targetBlockHeight, address, ticketPrice, giftEvery, callback, updateBlock, updateTxs) {
+  bitraffle.run = function(targetBlockHeight, address, ticketPrice, giftEvery, maxWinners, callback, updateBlock, updateTxs) {
 
     var error = function(message) {
       setTimeout(function () { callback(message); }, 0);
+    };
+
+    var callbackFinalize = function(result) {
+      setTimeout(function () { callback(undefined, result); }, 0);
     };
 
     var TX_PROCESS_BATCH = 20;
@@ -32,15 +36,18 @@
     var targetBlock;
 
     var finish = function() {
+      var result = {winners: null};
       if (targetBlock) {
         ticketsList.sort();
-        var winner = ticketsList[0];
+        result.winners = [];
+        // Select the winners
+        for (var i = 0; i < maxWinners; i++) {
+          var ticket = ticketsList[i];
+          result.winners.push({tx: ticketsIndex[ticket], ticket: ticket});
+        }
   //      console.log(ticketsList);
-        setTimeout(function () { callback(undefined, {tx: ticketsIndex[winner], winner: winner}); }, 0);
       }
-      else {
-        setTimeout(function () { callback(undefined, {tx: null, winner: null}); }, 0);
-      }
+      callbackFinalize(result);
     };
 
     var outputProcessor = function(outputs, isFinalBlock) {
